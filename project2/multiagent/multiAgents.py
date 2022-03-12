@@ -73,6 +73,8 @@ class ReflexAgent(Agent):
         newGhostStates = childGameState.getGhostStates()
         newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
 
+        score = 0
+
         if childGameState.isWin():
             return float('inf')
 
@@ -82,23 +84,28 @@ class ReflexAgent(Agent):
         # Find the distance from the closest food
         foodlist = newFood.asList()
         closestfood = float('inf')
-        for food in foodlist:
-            distNow = manhattanDistance(newPos,food)
-            closestfood = min(closestfood, distNow)
+        foodDists = [manhattanDistance(newPos,food) for food in foodlist]
+        closestfood = min(foodDists)
+            
+        score += 8 / closestfood       
 
         minGhostDist = float('inf')
         for ghost in newGhostStates:
             currGhostPosition = ghost.getPosition()
             minGhostDist = min(minGhostDist, manhattanDistance(newPos,currGhostPosition))
+            if minGhostDist < 1: # ghost too close
+                return -float('inf')
 
-        score = childGameState.getScore()
+        foodNum = childGameState.getNumFood()
+        score -= 8 * foodNum
         capsuleCoordinates = currentGameState.getCapsules()
         # if the pacman ate a capsule and the ghosts are scared, the score is better
         if newPos in capsuleCoordinates and sum(newScaredTimes) > 0:
-            score += 8 / minGhostDist + 8 / closestfood
+            score += 8 / minGhostDist
         else:
-            score += 8 / closestfood - 16 / minGhostDist
+            score += - 16 / minGhostDist
 
+        score += childGameState.getScore()
         return score
 
 def scoreEvaluationFunction(currentGameState):
@@ -159,8 +166,52 @@ class MinimaxAgent(MultiAgentSearchAgent):
         gameState.isLose():
         Returns whether or not the game state is a losing state
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        #code based on pseudocode by cgi.di.uoa.gr/~ys02/dialekseis2020/anazitisi_me_antipalotita.pdf
+        # Pacman(maximizer)  , the agent=0
+        def maxValue(gameState, depth):
+            # check if we reached a leaf node or the given depth
+            if gameState.isWin() or gameState.isLose() or depth == self.depth:
+                return self.evaluationFunction(gameState), None
+
+            v = -float('inf')
+            optimalAction = None
+
+            # for the available moves
+            for action in gameState.getLegalActions(0):
+                # for each child of the state, call minValue
+                child = gameState.getNextState(0, action)
+                childScore, _ = minValue(child, 1, depth)
+                # keep the max score calculated
+                if childScore > v:
+                    v, optimalAction = childScore, action
+            return v, optimalAction
+
+        # Ghost(minimizer)
+        def minValue(gameState, agent, depth):
+            if gameState.isWin() or gameState.isLose() or depth == self.depth:
+                return self.evaluationFunction(gameState), None
+
+            v = float('inf')
+            optimalAction = None
+
+            for action in gameState.getLegalActions(agent):
+                child = gameState.getNextState(agent, action)
+                # if agent is NOT the last ghost left, call minValue for the rest ghosts
+                if agent!=(gameState.getNumAgents()-1):
+                    childScore, _ = minValue(child, agent+1, depth)
+                else: 
+                # if agent is the last ghost, time for pacman to make a move so we call maxValue
+                    childScore, _ = maxValue(child, depth+1)
+                # keep the min score calculated
+                if childScore < v:
+                    v, optimalAction = childScore, action
+            return v, optimalAction
+
+        # main code where minimax procedure begins
+        # fetch the optimal action to be taken and return it
+        _, optimalAction = maxValue(gameState, 0)
+        return optimalAction
+
 
 class AlphaBetaAgent(MultiAgentSearchAgent):
     """
@@ -171,8 +222,58 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
         """
         Returns the minimax action using self.depth and self.evaluationFunction
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # Pacman(maximizer)  , the agent=0
+        def maxValue(gameState, depth, a, b):
+            # check if we reached a leaf node or the given depth
+            if gameState.isWin() or gameState.isLose() or depth == self.depth:
+                return self.evaluationFunction(gameState), None
+
+            v = -float('inf')
+            optimalAction = None
+
+            # for the available moves
+            for action in gameState.getLegalActions(0):
+                # for each child of the state, call minValue
+                child = gameState.getNextState(0, action)
+                childScore, _ = minValue(child, 1, depth, a, b)
+                # keep the max score calculated
+                if childScore > v:
+                    v, optimalAction = childScore, action
+                if v > b:
+                    return v, optimalAction
+                a = max(a, v)
+            return v, optimalAction
+
+        # Ghost(minimizer)
+        def minValue(gameState, agent, depth, a, b):
+            if gameState.isWin() or gameState.isLose() or depth == self.depth:
+                return self.evaluationFunction(gameState), None
+
+            v = float('inf')
+            optimalAction = None
+
+            for action in gameState.getLegalActions(agent):
+                child = gameState.getNextState(agent, action)
+                # if agent is NOT the last ghost left, call minValue for the rest ghosts
+                if agent!=(gameState.getNumAgents()-1):
+                    childScore, _ = minValue(child, agent+1, depth, a, b)
+                else: 
+                # if agent is the last ghost, time for pacman to make a move so we call maxValue
+                    childScore, _ = maxValue(child, depth+1, a, b)
+                # keep the min score calculated
+                if childScore < v:
+                    v, optimalAction = childScore, action
+                if v < a:
+                    return v, optimalAction
+                b = min(b, v)
+            return v, optimalAction
+
+        # main code where minimax procedure begins
+        a = -float('inf')
+        b = float('inf')
+        # fetch the optimal action to be taken and return it
+        _, optimalAction = maxValue(gameState, 0, a, b)
+        return optimalAction
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
     """
@@ -186,18 +287,98 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         All ghosts should be modeled as choosing uniformly at random from their
         legal moves.
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # the agent=0
+        def maxValue(gameState, depth):
+            # check if we reached a leaf node or the given depth
+            if gameState.isWin() or gameState.isLose() or depth == self.depth:
+                return self.evaluationFunction(gameState), None
+
+            v = -float('inf')
+            optimalAction = None
+
+            # for the available moves
+            for action in gameState.getLegalActions(0):
+                # for each child of the state, call minValue
+                child = gameState.getNextState(0, action)
+                childScore = minValue(child, 1, depth)
+                # keep the max score calculated
+                if childScore > v:
+                    v, optimalAction = childScore, action
+            return v, optimalAction
+
+
+        def minValue(gameState, agent, depth):
+            if gameState.isWin() or gameState.isLose() or depth == self.depth:
+                return self.evaluationFunction(gameState)
+
+            # Randomly select action for ghost (Min) by calculating score
+            score = 0
+            actions = gameState.getLegalActions(agent)
+            numActions = len(actions)
+            
+            for action in actions:
+                child = gameState.getNextState(agent, action)
+                # if agent is NOT the last ghost left, call minValue for the rest ghosts
+                if agent!=(gameState.getNumAgents()-1):
+                    childScore = minValue(child, agent+1, depth)
+                else: 
+                # if agent is the last ghost, time for pacman to make a move so we call maxValue
+                    childScore, _ = maxValue(child, depth+1)
+                # All ghosts should be modeled as choosing uniformly at random from their legal moves.
+                score += childScore*(1.0/numActions)
+            return score
+
+        # main code where minimax procedure begins
+        # fetch the optimal action to be taken and return it
+        _, optimalAction = maxValue(gameState, 0)
+        return optimalAction
 
 def betterEvaluationFunction(currentGameState):
-    """
-    Your extreme ghost-hunting, pellet-nabbing, food-gobbling, unstoppable
-    evaluation function (question 5).
+        """
+        Your extreme ghost-hunting, pellet-nabbing, food-gobbling, unstoppable
+        evaluation function (question 5).
 
-    DESCRIPTION: <write something here so we know what you did>
-    """
-    "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()    
+        DESCRIPTION: <write something here so we know what you did>
+        """
+        newPos = currentGameState.getPacmanPosition()
+        newFood = currentGameState.getFood()
+        newGhostStates = currentGameState.getGhostStates()
+        newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
+
+        score = 0
+
+        if currentGameState.isWin():
+            return float('inf')
+
+        if currentGameState.isLose():
+            return -float('inf')
+
+        # Find the distance from the closest food
+        foodlist = newFood.asList()
+        closestfood = float('inf')
+        foodDists = [manhattanDistance(newPos,food) for food in foodlist]
+        closestfood = min(foodDists)
+            
+        score += 8 / closestfood       
+
+        minGhostDist = float('inf')
+        for ghost in newGhostStates:
+            currGhostPosition = ghost.getPosition()
+            minGhostDist = min(minGhostDist, manhattanDistance(newPos,currGhostPosition))
+            if minGhostDist < 1: # ghost too close
+                return -float('inf')
+
+        foodNum = currentGameState.getNumFood()
+        score -= 8 * foodNum
+        capsuleCoordinates = currentGameState.getCapsules()
+        # if the pacman ate a capsule and the ghosts are scared, the score is better
+        if newPos in capsuleCoordinates and sum(newScaredTimes) > 0:
+            score += 8 / minGhostDist
+        else:
+            score += - 16 / minGhostDist
+
+        score += currentGameState.getScore()
+        return score
 
 # Abbreviation
 better = betterEvaluationFunction
